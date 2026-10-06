@@ -1,0 +1,33 @@
+services:
+  api:
+    build: .
+    image: warc-audit:latest
+    environment:
+      # In-container listen port; the host-side port is configurable below.
+      PORT: "8080"
+    ports:
+      # Override on the host, e.g. PORT=9090 docker compose up
+      # or  docker compose run --rm verify
+      - "${HOST_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+
+  # One-shot gate: waits for the API to be healthy, runs unit tests, the build
+  # check and the valid / bad-digest / bad-reference API smoke, then exits with
+  # the combined result code.
+  verify:
+    build: .
+    image: warc-audit:latest
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      PORT: "8080"
+      AUDIT_URL: "http://api:8080"
+    entrypoint: ["/bin/sh", "verify.sh"]
+    restart: "no"
